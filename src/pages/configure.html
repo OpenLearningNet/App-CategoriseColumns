@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+{{ app_init_js }}
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Configure Columns</title>
+<style type="text/css">
+    body {
+        padding: 8px;
+        height: 100%;
+    }
+
+    .columns {
+        height: 100%;
+        width: 100%;
+        display: table;
+        min-height: 240px;
+    }
+
+    .column-container:first-child {
+        border-top: 1px solid #ccc;
+        border-left: 1px solid #ccc;
+        border-bottom: 1px solid #ccc;
+
+        -webkit-border-top-left-radius: 4px;
+        -webkit-border-bottom-left-radius: 4px;
+        -moz-border-radius-topleft: 4px;
+        -moz-border-radius-bottomleft: 4px;
+        border-top-left-radius: 4px;
+        border-bottom-left-radius: 4px;
+    }
+
+    .column-container:last-child {
+        border-top: 1px solid #ccc;
+        border-right: 1px solid #ccc;
+        border-bottom: 1px solid #ccc;
+
+        -webkit-border-top-right-radius: 4px;
+        -webkit-border-bottom-right-radius: 4px;
+        -moz-border-radius-topright: 4px;
+        -moz-border-radius-bottomright: 4px;
+        border-top-right-radius: 4px;
+        border-bottom-right-radius: 4px;
+    }
+
+    .column-container {
+        display: table-cell;
+        padding: 8px;
+        height: 100%;
+
+        border-left: 1px solid #ccc;
+        border-top: 1px solid #ccc;
+        border-bottom: 1px solid #ccc;
+    }
+
+    .column-container h3 {
+        margin: 0;
+        padding: 0;
+
+        margin-bottom: 4px;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .group, .initial-group {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+
+    .group li, .initial-group li {
+        font-size: 16px;
+        cursor: default;
+        list-style: none;
+        background-color: #e6f0ff;
+        padding: 8px;
+        margin: 4px;
+
+        -webkit-border-radius: 3px;
+        -moz-border-radius: 3px;
+        border-radius: 3px;
+    }
+
+    .initial-container li {
+        display: inline-block;
+        cursor: pointer;
+    }
+
+    .inital-container {
+        margin-bottom: 6px;
+    }
+
+    #configText {
+        width: 100%;
+        height: 240px;
+    }
+
+    .spaced-container {
+        padding: 16px;
+    }
+</style>
+<link rel="stylesheet" type="text/css" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css">
+
+<script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.10.3/jquery-ui.min.js"></script>
+<script src="//netdna.bootstrapcdn.com/bootstrap/3.0.2/js/bootstrap.min.js"></script>
+</head>
+
+<body>
+    <div>
+    <textarea id="configText">
+Categorise the following foods:
+
+Fruits: apple, orange, pineapple, pear, grape
+Vegetables: carrot, potato, pumpkin
+Meats: beef, chicken, lamb
+    </textarea>
+    </div>
+
+    <div class="pull-right spaced-container">
+        <button class="save-config-btn btn btn-success" data-loading-text="Saving...">Save Puzzle</button>
+    </div>
+    <div class="text-center spaced-container">
+        <button id="generate" class="btn btn-primary">Generate Columns</button>
+    </div>
+
+    <div id="display-columns" class="columns">
+    </div>
+
+    <div class="initial-container">
+        <br>
+        <p>
+            <span id="description-text"></span>
+        </p>
+        <ul id="initial-group" class="initial-group">
+        </ul>
+    </div>
+
+    <div class="text-center spaced-container">
+        <button id="check" class="btn btn-success">Check Answers</button>
+    </div>
+
+    <div class="pull-right spaced-container">
+        <button class="save-config-btn btn btn-success" data-loading-text="Saving...">Save Puzzle</button>
+    </div>
+
+    <script type="text/javascript">
+        function shuffle(o) {
+            for (var j, x, i = o.length; i; j = Math.floor(Math.random() * i), x = o[--i], o[i] = o[j], o[j] = x);
+            return o;
+        };
+        
+        function generateColumns(configText) {
+            var lines = configText.split('\n');
+            var categoryRegex = /\n\s*(\w[\w|\s]*)\:/g;
+            var precedingText = lines.shift();
+            
+            configText = lines.join('\n');
+
+            var categoryTexts = configText.split(/\w+\:/g);
+
+            categoryTexts.shift(); // remove preceding text
+
+            $('#description-text').text(precedingText);
+
+            var categoryTitles = [];
+            var reg = new RegExp(categoryRegex); 
+            var result;
+            while ((result = reg.exec(configText)) !== null) {
+                categoryTitles.push(result[1]);
+            }
+
+            var categories = {};
+            var allWords = [];
+            $.each(categoryTexts, function(i, categoryWords) {
+                var words = categoryWords.split(/,/g);
+                $.each(words, function(wi, word) {
+                    categories[categoryTitles[i]] = categories[categoryTitles[i]] || [];
+                    categories[categoryTitles[i]].push($.trim(word));
+                    allWords.push($.trim(word));
+                });
+            });
+
+            var $columns = $('#display-columns').empty();
+            var $container;
+            $.each(categoryTitles, function(i, categoryTitle) {
+                $container = $('<div class="column-container"></div>');
+                $container
+                    .css({
+                    'width': Math.floor(100.0/categoryTitles.length) + '%'
+                    })
+                    .attr('data-title', categoryTitle)
+                    .append(
+                        $('<h3>').text(categoryTitle)
+                    )
+                    .append(
+                        $('<ul class="column group"></ul>').attr('id', 'column' + i)
+                    );
+                $columns.append($container);
+            });
+
+            var $words = $('#initial-group').empty();
+            $.each(shuffle(allWords), function(i, word) {
+                $words.append(
+                    $('<li>').text(word)
+                );
+            });
+
+            $( ".group" ).sortable({
+                connectWith: ".group"
+            }).disableSelection();
+
+            $( ".initial-group" ).sortable({
+                connectWith: ".group"
+            }).disableSelection();
+
+            return {
+                words: allWords,
+                categories: categories
+            };
+        };
+        
+        $(function() {
+            // TODO: load config text
+
+            generateColumns($('#configText').val());
+
+            $('#generate').on('click', function() {
+                generateColumns($('#configText').val());
+            });
+
+            $('.save-config-btn').on('click', function() {
+                $('.save-config-btn').button('loading');
+                alert('TODO: Save');
+                $('.save-config-btn').button('reset');
+            });
+
+            window.app.resize();
+        });
+    </script>
+</body>
+</html>
