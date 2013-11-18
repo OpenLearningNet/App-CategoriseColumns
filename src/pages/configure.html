@@ -136,10 +136,6 @@ Meats: beef, chicken, lamb
         </ul>
     </div>
 
-    <div class="text-center spaced-container">
-        <button id="check" class="btn btn-success">Check Answers</button>
-    </div>
-
     <div class="pull-right spaced-container">
         <button class="save-config-btn btn btn-success" data-loading-text="Saving...">Save Puzzle</button>
     </div>
@@ -153,11 +149,12 @@ Meats: beef, chicken, lamb
         function generateColumns(configText) {
             var lines = configText.split('\n');
             var categoryRegex = /\n\s*(\w[\w|\s]*)\:/g;
+            var splitRegex = /\n\s*\w[\w|\s]*\:/g;
             var precedingText = lines.shift();
             
             configText = lines.join('\n');
 
-            var categoryTexts = configText.split(/\w+\:/g);
+            var categoryTexts = configText.split(splitRegex);
 
             categoryTexts.shift(); // remove preceding text
 
@@ -207,32 +204,51 @@ Meats: beef, chicken, lamb
             });
 
             $( ".group" ).sortable({
-                connectWith: ".group"
+                connectWith: ".group",
+                update: function() { window.app.resize(); }
             }).disableSelection();
 
             $( ".initial-group" ).sortable({
-                connectWith: ".group"
+                connectWith: ".group",
+                update: function() { window.app.resize(); }
             }).disableSelection();
+
+            window.app.resize();
 
             return {
                 words: allWords,
                 categories: categories
             };
         };
-        
-        $(function() {
-            // TODO: load config text
 
-            generateColumns($('#configText').val());
+        $(function() {
+            $.getJSON("/run/getConfig", function(response) {
+                var configuration = response.configuration;
+
+                if (configuration && configuration.configText) {
+                    $('#configText').val(configuration.configText);
+                }
+
+                generateColumns($('#configText').val());
+            });
 
             $('#generate').on('click', function() {
                 generateColumns($('#configText').val());
             });
 
             $('.save-config-btn').on('click', function() {
-                $('.save-config-btn').button('loading');
-                alert('TODO: Save');
-                $('.save-config-btn').button('reset');
+                var $btn = $(this);
+                $btn.button('loading');
+                var configJSON = JSON.stringify({
+                    configText: $('#configText').val()
+                });
+
+                $.post("/run/saveConfig", {
+                    format: 'json',
+                    config: configJSON
+                }, function(data) {
+                    $btn.button('reset');
+                }, 'json');
             });
 
             window.app.resize();

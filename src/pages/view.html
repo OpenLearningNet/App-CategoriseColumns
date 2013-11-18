@@ -113,6 +113,7 @@
         color: white;
         font-size: 32px;
         text-align: center;
+        margin-bottom: 12px;
     }
 </style>
 <link rel="stylesheet" type="text/css" href="//netdna.bootstrapcdn.com/bootstrap/3.0.2/css/bootstrap.min.css">
@@ -166,21 +167,29 @@
             return userCategories;
         };
 
-        function loadAnswers(categories, answers) {
-            var allAnswers
-            $.each(answers, function(i, answer) {
+        function loadAnswers(answers) {
+            for (var category in answers) {
+                $.each(answers[category], function(i, word) {
+                    var $column = $('#display-columns .column-container[data-title="' + category + '"]').find('ul');
+                    $('#initial-group li:contains("' + word + '")').appendTo($column);
+                });
+            }
+        };
 
-            });
+        function setCompleted() {
+            $('#success-text').removeClass('hide').hide().fadeIn();
+            window.app.resize();
         };
         
         function generateColumns(configText) {
             var lines = configText.split('\n');
             var categoryRegex = /\n\s*(\w[\w|\s]*)\:/g;
+            var splitRegex = /\n\s*\w[\w|\s]*\:/g;
             var precedingText = lines.shift();
             
             configText = lines.join('\n');
 
-            var categoryTexts = configText.split(/\w+\:/g);
+            var categoryTexts = configText.split(splitRegex);
 
             categoryTexts.shift(); // remove preceding text
 
@@ -230,16 +239,20 @@
             });
 
             $(".group").sortable({
-                connectWith: ".group"
+                connectWith: ".group",
+                update: function() { window.app.resize(); }
             }).disableSelection();
 
             $(".initial-group").sortable({
-                connectWith: ".group"
+                connectWith: ".group",
+                update: function() { window.app.resize(); }
             }).disableSelection();
 
             $(".column-container li").on('mousedown', function() {
                 $(this).removeClass('incorrect').removeClass('correct');
             });
+
+            window.app.resize();
 
             return {
                 words: allWords,
@@ -247,19 +260,56 @@
             };
         };
 
+        var config;
         $(function() {
-            var configText = 'Categorise the following foods:\n\nFruits: apple, orange, pineapple, pear, grape\nVegetables: carrot, potato, pumpkin\nMeats: beef, chicken, lamb';
+            $.getJSON("/run/getConfig", function(response) {
+                var configuration = response.configuration;
 
-            var config = generateColumns(configText);
+                config = generateColumns(configuration.configText);
 
-            $('#save').on('click', function() {
-                $(this).button('loading');
-                alert('TODO: save');
-                $(this).button('reset');
+                 $.getJSON("/run/getSubmission", function(submissionResponse) {
+                    if (submissionResponse.success) {
+                        if (!submissionResponse.metadata) {
+                            submissionResponse.metadata = {
+                                answers: []
+                            };
+                        }
+                        loadAnswers(submissionResponse.metadata.answers);
+
+                        if (submissionResponse.metadata.completed) {
+                            setCompleted();
+                        }
+                    } else {
+                        alert("Unable to load submission at this time");
+                    }
+                });
+            });
+
+            $('#save').click(function() {
+                var answers = getAnswers();
+                var $btn = $(this);
+
+                $btn.button('loading');
+                $.post("/run/saveSubmission", {
+                    'metadata': JSON.stringify({
+                        'answers': answers
+                    })
+                }, function(response) {
+                    if (response.success) {
+                        $btn.button('reset');
+                    } else {
+                        alert('Unable to save at this time')
+                    }
+                }, 'json');
             });
 
             $('#check').on('click', function() {
-                $(this).button('loading');
+                if (!config) return;
+                $('.column li').removeClass('incorrect').removeClass('correct');
+
+                var $btn = $(this);
+
+                $btn.button('loading');
 
                 var userCategories = {};
 
@@ -273,12 +323,9 @@
                     });
                 });
 
-                console.log(userCategories);
-
                 var correct = true;
                 for (var title in config.categories) {
                     $.each(config.categories[title], function(i, word) {
-                        console.log(title, word);
                         if (userCategories[title] && userCategories[title][word]) {
                             console.log(title, word, 'correct');
                             userCategories[title][word].addClass('correct');
@@ -288,17 +335,49 @@
                     });
                 }
 
-                $('.column li').removeClass('incorrect').removeClass('correct');
                 $('.column li').not('.correct').addClass('incorrect');
 
+                var answers = getAnswers();
                 if (correct) {
-                    $('#success-text').removeClass('hide').hide().fadeIn();
-                    window.app.resize();
-                } else {
-                    window.app.sendMessage('notify', {'title': 'Some answers are incorrect.'});
-                }
+                    $.post("/run/saveSubmission", {
+                        'submit': true,
+                        'grading': JSON.stringify({
+                            'completed': true
+                        }),
+                        'metadata': JSON.stringify({
+                            'answers': answers,
+                            'completed': true
+                        })
+                    }, function(response) {
+                        if (response.success) {
+                            $btn.button('reset');
 
-                $(this).button('reset');
+                            setCompleted();
+                            window.app.sendMessage('updateProgress', {});
+                        } else {
+                            alert('Unable to submit at this time')
+                        }
+                    }, 'json');
+                } else {
+                    if ($('#initial-group').find('li').length > 0 ) {
+                        window.app.sendMessage('notify', {'title': 'There are still some words to place into categories.'});
+                    } else {
+                        window.app.sendMessage('notify', {'title': 'Some answers are incorrect.'});
+                    }
+
+                    $.post("/run/saveSubmission", {
+                        'metadata': JSON.stringify({
+                            'answers': answers,
+                            'incorrect': true
+                        })
+                    }, function(response) {
+                        if (response.success) {
+                            $btn.button('reset');
+                        } else {
+                            alert('Unable to save at this time')
+                        }
+                    }, 'json');
+                }
 
                 window.app.resize();
             });
